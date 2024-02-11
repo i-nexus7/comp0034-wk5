@@ -136,3 +136,23 @@ def test_delete_region(client, new_region):
     response = client.delete(f"/regions/{code}")
     assert response.status_code == 200
     assert response.json['message'] == 'Region NEW deleted.'
+
+def test_delete_region_not_exists(client):
+    """
+    GIVEN a Flask test client
+    WHEN a DELETE request is made to /regions/<noc-code> for a region that does not exist
+    THEN the response status code should be 404
+    AND the response content should include the message 'Region {noc_code} not found'
+    """
+    response = client.delete("/regions/AAA")
+    assert response.status_code == 404
+    assert response.json['message'] == 'Region AAA not found.'
+
+def test_get_events_status_code(client):
+    """
+    GIVEN a Flask test client
+    WHEN a GET request is made to /events
+    THEN the status code should be 200
+    """
+    response = client.get("/events")
+    assert response.status_code == 200

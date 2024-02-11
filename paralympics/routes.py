@@ -97,14 +97,20 @@ def get_events():
 def get_event(event_id):
     """ Returns the event with the given id JSON.
 
+    Returns 404 if the event is not found in the database.
+
     Args:
         event_id (int): The id of the event to return
     Returns:
-        JSON
+        JSON for the event if found otherwise 404
     """
-    event = db.session.execute(db.select(Event).filter_by(id=event_id)).scalar_one()
-    result = event_schema.dump(event)
-    return result
+    try:
+        event = db.session.execute(db.select(Event).filter_by(id=event_id)).scalar_one()
+        result = event_schema.dump(event)
+        return result
+    except exc.NoResultFound as e:
+        app.logger.error(f"Event id {event_id} was not found. Error: {e}")
+        abort(404, description="Event not found")
 
 
 @app.post('/events')
@@ -117,11 +123,19 @@ def add_event():
    Returns: 
         JSON
    """
-    ev_json = request.get_json()
-    event = event_schema.load(ev_json)
-    db.session.add(event)
-    db.session.commit()
-    return {"message": f"Event added with id= {event.id}"}
+    try:
+        ev_json = request.get_json()
+        event = event_schema.load(ev_json)
+        db.session.add(event)
+        db.session.commit()
+        return {"message": f"Event added with id= {event.id}"}
+    except exc.SQLAlchemyError as e:
+        # Log the exception
+        app.logger.error(f"A database error occurred: {str(e)}")
+        # Return a 400 error to the user who made the request
+        msg_content = f'Invalid data: {str(e)}'
+        msg = {'message': msg_content}
+        return make_response(msg, 400)
 
 
 @app.post('/regions')
@@ -134,11 +148,19 @@ def add_region():
     Returns: 
         JSON
     """
-    json_data = request.get_json()
-    region = region_schema.load(json_data)
-    db.session.add(region)
-    db.session.commit()
-    return {"message": f"Region added with NOC= {region.NOC}"}
+    try:
+        json_data = request.get_json()
+        region = region_schema.load(json_data)
+        db.session.add(region)
+        db.session.commit()
+        return {"message": f"Region added with NOC= {region.NOC}"}
+    except exc.SQLAlchemyError as e:
+        # Log the exception
+        app.logger.error(f"A database error occurred: {str(e)}")
+        # Return a 400 error to the user who made the request
+        msg_content = f'Invalid data: {str(e)}'
+        msg = {'message': msg_content}
+        return make_response(msg, 400)
 
 
 @app.delete('/events/<int:event_id>')
@@ -150,10 +172,18 @@ def delete_event(event_id):
     Returns: 
         JSON
     """
-    event = db.session.execute(db.select(Event).filter_by(id=event_id)).scalar_one()
-    db.session.delete(event)
-    db.session.commit()
-    return {"message": f"Event {event_id} deleted."}
+    try:
+        event = db.session.execute(db.select(Event).filter_by(id=event_id)).scalar_one()
+        db.session.delete(event)
+        db.session.commit()
+        return {"message": f"Event {event_id} deleted."}
+    except exc.NoResultFound as e:
+        # Log the exception
+        app.logger.error(f"A database error occurred: {str(e)}")
+        # Return a 404 error to the user who made the request
+        msg_content = f'Event {event_id} not found.'
+        msg = {'message': msg_content}
+        return make_response(msg, 404)
 
 
 @app.delete('/regions/<noc_code>')
@@ -170,11 +200,11 @@ def delete_region(noc_code):
         db.session.delete(region)
         db.session.commit()
         return {"message": f"Region {noc_code} deleted."}
-    except exc.SQLAlchemyError as e:
+    except exc.NoResultFound as e:
         # Log the exception
         app.logger.error(f"A database error occurred: {str(e)}")
         # Return a 404 error to the user who made the request
-        msg_content = f'Region {noc_code} not found'
+        msg_content = f'Region {noc_code} not found.'
         msg = {'message': msg_content}
         return make_response(msg, 404)
 
@@ -187,19 +217,27 @@ def event_update(event_id):
         JSON message
     """
     # Find the event in the database
-    existing_event = db.session.execute(
-        db.select(Event).filter_by(event_id=event_id)
-    ).scalar_one_or_none()
-    # Get the updated details from the json sent in the HTTP patch request
-    event_json = request.get_json()
-    # Use Marshmallow to update the existing records with the changes from the json
-    event_update = event_schema.load(event_json, instance=existing_event, partial=True)
-    # Commit the changes to the database
-    db.session.add(event_update)
-    db.session.commit()
-    # Return json success message
-    response = {"message": f"Event with id={event_id} updated."}
-    return response
+    try:
+        existing_event = db.session.execute(
+            db.select(Event).filter_by(event_id=event_id)
+        ).scalar_one_or_none()
+        # Get the updated details from the json sent in the HTTP patch request
+        event_json = request.get_json()
+        # Use Marshmallow to update the existing records with the changes from the json
+        event_update = event_schema.load(event_json, instance=existing_event, partial=True)
+        # Commit the changes to the database
+        db.session.add(event_update)
+        db.session.commit()
+        # Return json success message
+        response = {"message": f"Event with id={event_id} updated."}
+        return response
+    except exc.NoResultFound as e:
+        # Log the exception
+        app.logger.error(f"A database error occurred: {str(e)}")
+        # Return a 404 error to the user who made the request
+        msg_content = f'Event {event_id} not found.'
+        msg = {'message': msg_content}
+        return make_response(msg, 404)
 
 
 @app.patch("/regions/<noc_code>")
@@ -212,17 +250,25 @@ def region_update(noc_code):
     Returns:
         JSON message
     """
-    # Find the region in the database
-    existing_region = db.session.execute(
-        db.select(Region).filter_by(NOC=noc_code)
-    ).scalar_one_or_none()
-    # Get the updated details from the json sent in the HTTP patch request
-    region_json = request.get_json()
-    # Use Marshmallow to update the existing records with the changes from the json
-    region_update = region_schema.load(region_json, instance=existing_region, partial=True)
-    # Commit the changes to the database
-    db.session.add(region_update)
-    db.session.commit()
-    # Return json message
-    response = {"message": f"Region {noc_code} updated."}
-    return response
+    try:
+        # Find the region in the database
+        existing_region = db.session.execute(
+            db.select(Region).filter_by(NOC=noc_code)
+        ).scalar_one_or_none()
+        # Get the updated details from the json sent in the HTTP patch request
+        region_json = request.get_json()
+        # Use Marshmallow to update the existing records with the changes from the json
+        region_update = region_schema.load(region_json, instance=existing_region, partial=True)
+        # Commit the changes to the database
+        db.session.add(region_update)
+        db.session.commit()
+        # Return json message
+        response = {"message": f"Region {noc_code} updated."}
+        return response
+    except exc.NoResultFound as e:
+        # Log the exception
+        app.logger.error(f"A database error occurred: {str(e)}")
+        # Return a 404 error to the user who made the request
+        msg_content = f'Region {noc_code} not found.'
+        msg = {'message': msg_content}
+        return make_response(msg, 404)

@@ -5,6 +5,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 from sqlalchemy.orm import DeclarativeBase
+from marshmallow.exceptions import ValidationError
 
 
 # https://flask-sqlalchemy.palletsprojects.com/en/3.1.x/quickstart/
@@ -85,6 +86,7 @@ def create_app(test_config=None):
         # Register the routes with the app in the context
         from paralympics import routes
     app.register_error_handler(401, routes.resource_not_found)
+    app.register_error_handler(ValidationError, routes.register_validation_error)
     app.logger.info(f"The app is starting...")
     return app
 
