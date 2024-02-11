@@ -21,14 +21,22 @@ def app():
     """
     # See https://flask.palletsprojects.com/en/2.3.x/tutorial/tests/#id2
     # Create a temporary testing database
-    db_path = Path(__file__).parent.parent.joinpath('data', 'paralympics_testdb.sqlite')
+    db_path = Path(__file__).parent.parent.joinpath('instance', 'paralympics_testdb.sqlite')
     test_cfg = {
         "TESTING": True,
         "SQLALCHEMY_DATABASE_URI": "sqlite:///" + str(db_path),
     }
     app = create_app(test_config=test_cfg)
 
+    with app.app_context():
+        db.create_all()
+
     yield app
+
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+        db.engine.dispose()
 
     # clean up / reset resources
     # Delete the test database (if adding data to your database takes a long time you may prefer not to delete the

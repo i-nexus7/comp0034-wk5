@@ -1,4 +1,6 @@
 import os
+import logging
+from logging.config import dictConfig
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
@@ -20,6 +22,27 @@ ma = Marshmallow()
 
 
 def create_app(test_config=None):
+    logging.basicConfig(filename='paralympics-error.log',level=logging.DEBUG)
+    dictConfig({
+        'version': 1,
+        'formatters': {'default': {
+            'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+        }},
+        'handlers': {'wsgi': {
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://flask.logging.wsgi_errors_stream',
+            'formatter': 'default'
+        },
+            'file': {
+                'class': 'logging.FileHandler',
+                'filename': 'paralympics-error.log',
+                'formatter': 'default'
+            }},
+        'root': {
+            'level': 'INFO',
+            'handlers': ['wsgi','file']
+        }
+    })
     # create and configure the app
     app = Flask('paralympics', instance_relative_config=True)
     app.config.from_mapping(
@@ -61,7 +84,8 @@ def create_app(test_config=None):
 
         # Register the routes with the app in the context
         from paralympics import routes
-
+    app.register_error_handler(401, routes.resource_not_found)
+    app.logger.info(f"The app is starting...")
     return app
 
 
